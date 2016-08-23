@@ -208,7 +208,9 @@ window.monkeychat.init = function(divIDTag, appid, appkey, accessToken, initalUs
 window.onfocus = function(){
 	pendingMessages = 0;
 	mky_focused = true;
-	document.getElementById('mky-title').innerHTML = "Criptext Widget";
+	if(document.getElementById('mky-title')){
+		document.getElementById('mky-title').innerHTML = "Criptext Widget";
+	}
 };
 window.onblur = function(){
 	mky_focused = false;
@@ -219,7 +221,7 @@ window.onblur = function(){
 			pendingMessages = myConversations[key].unreadMessageCounter;
 		}
 	})
-	if(pendingMessages){
+	if(pendingMessages && document.getElementById('mky-title')){
 		document.getElementById('mky-title').innerHTML = pendingMessages + " Pending Messages";
 	}
 	
@@ -571,7 +573,7 @@ function createConversation(user){
 		} 
     });
 
-    if(!mky_focused){
+    if(!mky_focused && document.getElementById('mky-title')){
 		pendingMessages++;
 		document.getElementById('mky-title').innerHTML = pendingMessages + " Pending Messages";
 	}
@@ -718,7 +720,7 @@ function defineMessage(mokMessage) {
 			message.status = 52;
 		}
 */
-		if(store.getState().conversations[conversationId].unreadMessageCounter <= 0 && !mky_focused){
+		if(store.getState().conversations[conversationId].unreadMessageCounter <= 0 && !mky_focused && document.getElementById('mky-title')){
 			
 			pendingMessages++;
 			document.getElementById('mky-title').innerHTML = pendingMessages + " Pending Messages";
