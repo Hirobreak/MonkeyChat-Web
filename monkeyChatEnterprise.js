@@ -22,6 +22,9 @@ const OFFLINE = 0;
 const DISCONNECTED = 1;
 const CONNECTING = 2;
 const CONNECTED = 3;
+const SYNCING = 4;
+const CONVERSATIONS_LOAD = 20;
+const MESSAGES_LOAD = 20;
 const colorUsers = ["#6f067b","#00a49e","#b3007c","#b4d800","#e20068","#00b2eb","#ec870e","#84b0b9","#3a6a74","#bda700","#826aa9","#af402a","#733610","#020dd8","#7e6565","#cd7967","#fd78a7","#009f62","#336633","#e99c7a","#000000"];
 
 var IDDIV, MONKEY_APP_ID, MONKEY_APP_KEY, MONKEY_DEBUG_MODE, ACCESS_TOKEN, VIEW, STYLES, COMPANY_NAME, CONVERSATION_ID;
@@ -74,6 +77,7 @@ class MonkeyChat extends React.Component {
 				onUserSession={this.handleUserSession}
 				conversations={this.props.store.conversations}
 				conversation={this.props.store.conversations[this.state.conversationId]} 
+				panelParams = {this.state.panelParams}
 				onConversationOpened={this.handleConversationOpened}
 				onMessagesLoad={this.handleMessagesLoad}
 				onMessage={this.handleMessage}
@@ -267,6 +271,12 @@ monkey.on('Message', function(mokMessage){
 	defineMessage(mokMessage);
 });
 
+// --------------- ON SYNC MESSAGE ----------------- //
+monkey.on('MessageSync', function(mokMessage){
+	console.log('App - MessageSync');
+	defineMessage(mokMessage, true);
+});
+
 // ------------ ON MESSAGE UNSEND -------------- //
 monkey.on('MessageUnsend', function(mokMessage){
 	console.log('App - MessageUnsend');
@@ -290,14 +300,17 @@ monkey.on('StatusChange', function(data){
 			params = {backgroundColor : "red", color : 'white', show : true, message : "No Internet Connection", fontSize : '15px'};
 			break;
 		case DISCONNECTED:
-			var reconnectDiv = <div style={{fontSize : '15px'}}>You Have a Session somewhere else! <span className="mky-connect-link" onClick={ () => {monkey.startConnection()} } >Connect Here!</span></div>
+			var reconnectDiv = <div style={{fontSize : '15px'}} onClick={ () => {monkey.startConnection()} }>You have been disconnected! Connect Here!</div>
 			params = {backgroundColor : "black", color : 'white', show : true, message : reconnectDiv};
 			break;
 		case CONNECTING:
-			params = {backgroundColor : "#FF9900", color : 'black', show : true, message : "Connecting...", fontSize : '15px'};
+			params = {backgroundColor : "#fed859", color : 'black', show : true, message : "Connecting...", fontSize : '15px'};
 			break;
 		case CONNECTED:
 			params = {backgroundColor : "#429A38", color : 'white', show : false, message : "Connected!!", fontSize : '15px'};
+			break;
+		case SYNCING:
+			params = {backgroundColor : "#ff7043", color : 'white', show : true, message : "Syncing Messages...", fontSize : '15px'};
 			break;
 		default:
 			params = {};
@@ -410,6 +423,34 @@ monkey.on('GroupRemove', function(data){
 		store.dispatch(actions.removeMember(data.member, data.id));
 	}
 });
+
+monkey.on('GroupAdd', function(data){
+	if(!store.getState().conversations[data.id]){
+		return;
+	}
+
+	if(store.getState().users[data.member]){
+		return store.dispatch(actions.addMember(data.member, data.id));
+	}
+
+	monkey.getInfoById(data.member, function(err, userInfo){
+		if(err){
+            return console.log(err);
+        }
+
+        let users = {};
+        let userTmp = {
+	    	id: data.member,
+	    	name: userInfo.name == undefined ? 'Unknown' : user.name,
+	    	avatar : vars.AVATAR_BASE_URL + data.member + ".png"
+	    }
+	    users[userTmp.id] = userTmp;
+
+		store.dispatch(actions.addUsersContact(users));
+		store.dispatch(actions.addMember(data.member, data.id));
+	});
+	
+})
 
 // MonkeyChat
 
@@ -695,7 +736,7 @@ function createMessage(message) {
 	}
 }
 
-function defineMessage(mokMessage) {
+function defineMessage(mokMessage, syncing) {
 	let conversationId = store.getState().users.userSession.id == mokMessage.recipientId ? mokMessage.senderId : mokMessage.recipientId;
 	var conversation = store.getState().conversations[conversationId];
 	var notification_text = "";
@@ -718,7 +759,9 @@ function defineMessage(mokMessage) {
 			message.status = 52;
 		}
 */
-		if(store.getState().conversations[conversationId].unreadMessageCounter <= 0 && !mky_focused){
+
+		if(store.getState().conversations[conversationId].unreadMessageCounter <= 0 && !mky_focused && document.getElementById('mky-title') && !syncing){
+
 			
 			pendingMessages++;
 			document.getElementById('mky-title').innerHTML = pendingMessages + " Pending Messages";
@@ -726,7 +769,7 @@ function defineMessage(mokMessage) {
 		}
 		store.dispatch(actions.addMessage(message, conversationId, false));
 
-		if( (!conversation.lastMessage || conversation.messages[conversation.lastMessage].datetimeOrder < message.datetimeOrder) && store.getState().users.userSession.id != mokMessage.senderId && !mky_focused){
+		if( (!conversation.lastMessage || conversation.messages[conversation.lastMessage].datetimeOrder < message.datetimeOrder) && store.getState().users.userSession.id != mokMessage.senderId && !mky_focused && !syncing){
 			monkey.closePush(conversation.lastMessage);
 			if (conversation.id.substring(0, 2) == "G:") {
 			    notification_text = store.getState().users[message.senderId].name + ' has sent a message to ' + conversation.name + '!';
